@@ -65,6 +65,8 @@ struct totem_interface {
 	struct totem_ip_address bindnet;
 	struct totem_ip_address boundto;
 	struct totem_ip_address mcast_addr;
+	struct totem_ip_address announce_ip;
+	struct totem_ip_address current_bound_ip;
 	uint16_t ip_port;
 	uint16_t ttl;
 	int member_count;

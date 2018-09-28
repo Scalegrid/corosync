@@ -101,7 +101,7 @@ struct totemudpu_member {
 	int fd;
 	int active;
 };
-	
+struct totem_ip_address zero_addr;
 struct totemudpu_instance {
 	hmac_state totemudpu_hmac_state;
 
@@ -1203,7 +1203,16 @@ static int netif_determine (
 		interface_up, interface_num,
                 instance->totem_config->clear_node_high_bit);
 
+	/* Save currently bounded local IP information in current_bound_ip */
+	totemip_copy(&instance->totem_interface->current_bound_ip,bound_to);
 
+
+	/* If announce Ip is not not zero, then copy announce ip to bound_to IP. This IP and ID will be used in all corosync communication */
+	if(totemip_compare(&instance->totem_interface->announce_ip,&zero_addr)!=0){
+		instance->totem_interface->announce_ip.nodeid = bound_to->nodeid;
+		totemip_copy(bound_to,&instance->totem_interface->announce_ip);
+		log_printf(LOGSYS_LEVEL_NOTICE, "corosync bound ip is  [%s] and node id is : %d",totemip_print(bound_to),bound_to->nodeid);
+		}
 	return (res);
 }
 
@@ -1372,9 +1381,9 @@ static int totemudpu_build_sockets_ip (
 
 	/*
 	 * Bind to unicast socket used for token send/receives
-	 * This has the side effect of binding to the correct interface
+	 * This has the side effect of binding to the correct interface. While binding we need to use current_bound_ip as bound_to address is over-ridden by announce ip 
 	 */
-	totemip_totemip_to_sockaddr_convert(bound_to, instance->totem_interface->ip_port, &sockaddr, &addrlen);
+	totemip_totemip_to_sockaddr_convert(&instance->totem_interface->current_bound_ip, instance->totem_interface->ip_port, &sockaddr, &addrlen);
 	res = bind (instance->token_socket, (struct sockaddr *)&sockaddr, addrlen);
 	if (res == -1) {
 		LOGSYS_PERROR (errno, instance->totemudpu_log_level_warning,
@@ -1450,7 +1459,6 @@ int totemudpu_initialize (
 	totemsrp_stats_t *stats,
 	int interface_no,
 	void *context,
-
 	void (*deliver_fn) (
 		void *context,
 		const void *msg,
@@ -1464,7 +1472,11 @@ int totemudpu_initialize (
 		void *context))
 {
 	struct totemudpu_instance *instance;
+	const char zero_now[] = "0.0.0.0";
 
+	memset(&zero_addr, 0, sizeof(struct totem_ip_address));
+	totemip_parse(&zero_addr,zero_now,AF_INET);
+	
 	instance = malloc (sizeof (struct totemudpu_instance));
 	if (instance == NULL) {
 		return (-1);
@@ -1496,15 +1508,19 @@ int totemudpu_initialize (
 
 	init_crypto(instance);
 
+
+
 	/*
 	 * Initialize local variables for totemudpu
 	 */
 	instance->totem_interface = &totem_config->interfaces[interface_no];
+	log_printf(LOGSYS_LEVEL_NOTICE,"The announce ip is [%s]",totemip_print(&instance->totem_interface->announce_ip));
 	memset (instance->iov_buffer, 0, FRAME_SIZE_MAX);
 
 	instance->totemudpu_poll_handle = poll_handle;
 
 	instance->totem_interface->bindnet.nodeid = instance->totem_config->node_id;
+
 
 	instance->context = context;
 	instance->totemudpu_deliver_fn = deliver_fn;
@@ -1749,7 +1765,7 @@ static int totemudpu_create_sending_socket(
 	/*
 	 * Bind to sending interface
 	 */
-	totemip_totemip_to_sockaddr_convert(&instance->my_id, 0, &sockaddr, &addrlen);
+	totemip_totemip_to_sockaddr_convert(&instance->totem_interface->current_bound_ip, 0, &sockaddr, &addrlen);
 	res = bind (fd, (struct sockaddr *)&sockaddr, addrlen);
 	if (res == -1) {
 		LOGSYS_PERROR (errno, instance->totemudpu_log_level_warning,

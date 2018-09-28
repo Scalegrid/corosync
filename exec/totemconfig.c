@@ -285,6 +285,7 @@ extern int totem_config_read (
 	hdb_handle_t object_find_member_handle;
 	const char *transport_type;
 	int member_count = 0;
+	const char zero_now[] = "0.0.0.0";
 
 	res = totem_handle_find (objdb, &object_totem_handle);
 	if (res == -1) {
@@ -407,7 +408,17 @@ printf ("couldn't find totem handle\n");
 			res = totemip_parse (&totem_config->interfaces[ringnumber].bindnet, str,
 					     totem_config->interfaces[ringnumber].mcast_addr.family);
 		}
+		/*
+		 * getting the announce Ip for NAT support.
+		 */
 
+		totemip_parse(&totem_config->interfaces[ringnumber].announce_ip,zero_now,AF_INET);
+		totemip_parse(&totem_config->interfaces[ringnumber].current_bound_ip,zero_now,AF_INET);
+
+		if (!objdb_get_string (objdb, object_interface_handle, "announceip", &str)) {
+					res = totemip_parse (&totem_config->interfaces[ringnumber].announce_ip, str,
+							     totem_config->interfaces[ringnumber].mcast_addr.family);
+				}
 		/*
 		 * Get the TTL
 		 */
